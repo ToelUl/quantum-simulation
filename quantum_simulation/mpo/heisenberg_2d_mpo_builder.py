@@ -7,7 +7,7 @@ H = J * Σ_{<ij>} (S^x_i S^x_j + S^y_i S^y_j + S^z_i S^z_j)
 where <ij> denotes nearest neighbors on a square lattice.
 """
 
-from auto_mpo import FSM, NamedData, generate_mpo_spin_operators
+from .auto_mpo import FSM, NamedData, generate_mpo_spin_operators
 
 class Heisenberg2DMPOBuilder:
     """Builds the MPO for the 2D Heisenberg model.

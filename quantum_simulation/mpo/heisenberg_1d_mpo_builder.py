@@ -6,7 +6,7 @@ The Hamiltonian is defined as:
 H = J * Σ_{i} (S^x_i S^x_{i+1} + S^y_i S^y_{i+1} + S^z_i S^z_{i+1})
 """
 
-from auto_mpo import FSM, NamedData, generate_mpo_spin_operators
+from .auto_mpo import FSM, NamedData, generate_mpo_spin_operators
 
 class Heisenberg1DMPOBuilder:
     """Builds the MPO for the 1D Heisenberg chain.

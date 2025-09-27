@@ -6,7 +6,7 @@ This module provides the TTPrimeJModelMPOBuilder class, which adds the
 next-nearest-neighbor (NNN) hopping terms (t') to the standard t-J model.
 """
 
-from tj_model_mpo_builder import TJModelMPOBuilder
+from .tj_model_mpo_builder import TJModelMPOBuilder
 
 class TTPrimeJModelMPOBuilder(TJModelMPOBuilder):
     """Builds and manages the MPO for the 2D t-t'-J model.

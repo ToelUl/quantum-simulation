@@ -8,7 +8,7 @@ interactions (J2).
 """
 
 # We build upon the t-t'-J model builder
-from ttprime_j_model_mpo_builder import TTPrimeJModelMPOBuilder
+from .ttprime_j_model_mpo_builder import TTPrimeJModelMPOBuilder
 
 class T1T2J1J2ModelMPOBuilder(TTPrimeJModelMPOBuilder):
     """Builds the MPO for the 2D t1-t2-J1-J2 model.

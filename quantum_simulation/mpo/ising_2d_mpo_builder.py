@@ -7,7 +7,7 @@ H = -J * Σ_{<ij>} S^x_i S^x_j - g * Σ_{i} S^z_i
 where <ij> denotes nearest neighbors on a square lattice.
 """
 
-from auto_mpo import FSM, NamedData, generate_mpo_spin_operators
+from .auto_mpo import FSM, NamedData, generate_mpo_spin_operators
 
 class Ising2DMPOBuilder:
     """Builds the MPO for the 2D transverse-field Ising model.

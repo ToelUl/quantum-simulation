@@ -6,7 +6,7 @@ The Hamiltonian is defined as:
 H = -J * Σ_{i} S^x_i S^x_{i+1} - g * Σ_{i} S^z_i
 """
 
-from auto_mpo import FSM, NamedData, generate_mpo_spin_operators
+from .auto_mpo import FSM, NamedData, generate_mpo_spin_operators
 
 class Ising1DMPOBuilder:
     """Builds the MPO for the 1D transverse-field Ising chain.

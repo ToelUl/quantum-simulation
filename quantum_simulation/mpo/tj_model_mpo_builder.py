@@ -9,7 +9,7 @@ provided `finite_state_machine` module to automatically generate and compress
 the MPO.
 """
 
-from auto_mpo import FSM, NamedData, generate_mpo_hardcore_boson_operators
+from .auto_mpo import FSM, NamedData, generate_mpo_hardcore_boson_operators
 
 class TJModelMPOBuilder:
     """Builds and manages the MPO for the 2D t-J model.
