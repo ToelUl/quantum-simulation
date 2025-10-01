@@ -92,6 +92,8 @@ from .models import (
     xy_chain_ground_energy,
     kitaev_chain_bogoliubov_spectrum,
     kitaev_chain_ground_energy,
+    xy_chain_winding_number,
+    kitaev_chain_winding_number,
 )
 from .eigensolver import (
     lanczos_ground_state,
@@ -191,6 +193,8 @@ __all__ = [
     "xy_chain_ground_energy",
     "kitaev_chain_bogoliubov_spectrum",
     "kitaev_chain_ground_energy",
+    "xy_chain_winding_number",
+    "kitaev_chain_winding_number",
     # eigensolver
     "lanczos_ground_state",
     # domain

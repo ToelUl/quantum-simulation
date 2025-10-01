@@ -1,6 +1,7 @@
 import torch
 import sympy as sp
 import numpy as np
+import matplotlib.pyplot as plt
 from typing import Union, Callable, Dict, Any, Optional
 
 from IPython.display import display
@@ -1104,4 +1105,180 @@ def kitaev_chain_ground_energy(lattice_length: int = 4,
         lattice_length=lattice_length, jx=4.0 * jx, jy=4.0 * jy, h=2.0 * h, phi=phi, use_abc=use_abc
     )
 
+
+def xy_chain_winding_number(
+    jx: float = 1.0,
+    jy: float = 0.0,
+    h: float = 0.5,
+    plot: bool = True,
+    color: str = 'b',
+    rstride: int = 5,
+    cstride: int = 5,
+    tolerance: float = 1e-5
+) -> int | str:
+    """Calculates and visualizes the winding number of a 1D XY chain.
+
+    This function computes the vector field d(k) of the Hamiltonian for a
+    one-dimensional XY chain in a transverse magnetic field. It then determines
+    the topological winding number by checking if the surface formed by this
+    vector field encloses the origin. An optional 3D plot of this surface
+    can be generated.
+
+    The Hamiltonian is of the form:
+    H = -Σ [ J_x S_i^x S_{i+1}^x + J_y S_i^y S_{i+1}^y + h S_i^z ]
+    After a Jordan-Wigner transformation, the momentum space Hamiltonian is
+    H(k) = d(k) · σ, where d(k) is the vector field calculated here.
+
+    Args:
+        jx: The coupling constant for the x-direction interaction.
+        jy: The coupling constant for the y-direction interaction.
+        h: The strength of the transverse magnetic field.
+        plot: If True, generates and displays a 3D plot of the
+            vector field surface. If False, only the winding number is
+            returned without plotting.
+        color: The color of the wireframe plot for the vector field.
+        rstride: The row stride for the wireframe plot.
+        cstride: The column stride for the wireframe plot.
+        tolerance: The numerical tolerance used to determine if the
+            vector field surface encloses the origin.
+
+    Returns:
+        The calculated winding number. Returns 1 for a topologically
+        non-trivial phase, 0 for a trivial phase, and 'critical' if the
+        system is at a phase transition point (i.e., the surface passes
+        through the origin).
+    """
+    # Define the parameter space for the calculation.
+    # The surface is parameterized by an auxiliary angle and the wave vector k.
+    azimuthal_angles = np.linspace(0, np.pi, 50)
+    wave_vectors = np.linspace(-np.pi, np.pi, 100)
+    azimuthal_angles, wave_vectors = np.meshgrid(azimuthal_angles, wave_vectors)
+
+    jx = jx / 4  # Normalize by 4 for consistency with standard conventions.
+    jy = jy / 4  # Normalize by 4 for consistency with standard conventions.
+    h = h / 2  # Normalize by 2 for consistency with standard conventions.
+
+    # Calculate parameters for the vector field d(k).
+    # This avoids division by zero if jx and j_y are both zero.
+    j_sum = jx + jy
+    if np.isclose(j_sum, 0):
+        # If both couplings are zero, the system is trivial.
+        anisotropy_param = 0.0
+    else:
+        anisotropy_param = (jx - jy) / j_sum
+
+    # Components of the vector field d(k) = (d_x(k), d_y(k), d_z(k)).
+    # This vector fully describes the momentum-space Hamiltonian.
+    d_x = -2 * anisotropy_param * j_sum * np.sin(2 * azimuthal_angles) * np.sin(wave_vectors)
+    d_y = 2 * anisotropy_param * j_sum * np.cos(2 * azimuthal_angles) * np.sin(wave_vectors)
+    d_z = 2 * (h - j_sum * np.cos(wave_vectors))
+
+    # Determine the winding number by checking if the surface encloses the origin.
+    # This is a simplified check: a surface encloses the origin if the range
+    # of each coordinate spans from a negative to a positive value.
+    is_enclosing = (d_x.max() > tolerance and d_x.min() < -tolerance and
+                    d_y.max() > tolerance and d_y.min() < -tolerance and
+                    d_z.max() > tolerance and d_z.min() < -tolerance)
+
+    # The surface does not enclose the origin if it's entirely on one side
+    # of any cardinal plane (xy, yz, xz).
+    is_outside = (d_x.max() < -tolerance or d_x.min() > tolerance or
+                  d_y.max() < -tolerance or d_y.min() > tolerance or
+                  d_z.max() < -tolerance or d_z.min() > tolerance)
+
+    if is_enclosing:
+        winding_number = 1
+    elif is_outside:
+        winding_number = 0
+    else:
+        # If neither condition is met, the surface passes through the origin,
+        # indicating a gapless critical point.
+        winding_number = "critical"
+
+    # Generate the plot if requested by the user.
+    if plot:
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Plot the surface formed by the vector field d(k).
+        ax.plot_wireframe(
+            d_x, d_y, d_z, color=color, rstride=rstride,
+            cstride=cstride, linewidth=0.5
+        )
+
+        # Plot a small red sphere at the origin to mark the singularity point.
+        sphere_radius = 0.025
+        u = np.linspace(0, 2 * np.pi, 100)
+        v = np.linspace(0, np.pi, 100)
+        sphere_x = sphere_radius * np.outer(np.cos(u), np.sin(v))
+        sphere_y = sphere_radius * np.outer(np.sin(u), np.sin(v))
+        sphere_z = sphere_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+        ax.plot_surface(sphere_x, sphere_y, sphere_z, color='r')
+
+        # Set plot labels and title with LaTeX for better formatting.
+        ax.set_xlabel(r"$d_x(k)$")
+        ax.set_ylabel(r"$d_y(k)$")
+        ax.set_zlabel(r"$d_z(k)$")
+
+        title_text = (
+            f"Winding Number = {winding_number}"
+        )
+        ax.set_title(title_text)
+        plt.tight_layout()
+
+        plt.show()
+
+    return winding_number
+
+
+def kitaev_chain_winding_number(
+    hopping: float = 1.0,
+    pairing_gap: float = 1.0,
+    chemical_potential: float = 1.0,
+    plot: bool = True,
+    color: str = 'b',
+    rstride: int = 5,
+    cstride: int = 5,
+    tolerance: float = 1e-5
+) -> int | str:
+    """Calculates and visualizes the winding number of the Kitaev chain model.
+
+    This function computes the vector field d(k) of the Hamiltonian for the
+    Kitaev chain, a prototypical model for a 1D p-wave superconductor that
+    can host Majorana zero modes. It then determines the topological winding
+    number by checking if the surface formed by this vector field encloses
+    the origin. An optional 3D plot of this surface can be generated.
+
+    The Hamiltonian is of the form:
+    H = -t Σ (c_i^dag c_{i+1} + h.c.) + Δ Σ (c_i c_{i+1} + h.c.) - μ Σ (n_i-1/2)
+    After a Fourier transform, the momentum space Hamiltonian is
+    H(k) = d(k) · σ, where d(k) is the vector field calculated here.
+
+    Args:
+        hopping: The nearest-neighbor hopping amplitude (t).
+        pairing_gap: The superconducting pairing gap (Δ).
+        chemical_potential: The chemical potential (μ).
+        plot: If True, generates and displays a 3D plot of the
+            vector field surface. If False, only the winding number is
+            returned without plotting.
+        color: The color of the wireframe plot for the vector field.
+        rstride: The row stride for the wireframe plot.
+        cstride: The column stride for the wireframe plot.
+        tolerance: The numerical tolerance used to determine if the
+            vector field surface encloses the origin.
+
+    Returns:
+        The calculated winding number. Returns 1 for a topologically
+        non-trivial phase, 0 for a trivial phase, and 'critical' if the
+        system is at a phase transition point (i.e., the surface passes
+        through the origin).
+    """
+    jx = 0.5 * (hopping - pairing_gap)
+    jy = 0.5 * (hopping + pairing_gap)
+    h = -0.5 * chemical_potential
+    return xy_chain_winding_number(
+        jx=4.0 * jx, jy=4.0 * jy, h=2.0 * h,
+        plot=plot, color=color, rstride=rstride,
+        cstride=cstride, tolerance=tolerance
+    )
 
