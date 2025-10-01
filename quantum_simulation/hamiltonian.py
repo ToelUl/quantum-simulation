@@ -1,9 +1,11 @@
 
 import torch
+import numpy as np
 from typing import List, Callable, Union
 from abc import ABC, abstractmethod
 from . import operator as op
 from .operation import nested_kronecker_product
+from .domain import generate_k_space
 
 
 class Term(ABC):
@@ -158,97 +160,132 @@ class Hamiltonian:
         return H
 
 
-class HKBuilder:
-    """A builder class for constructing 2x2 H_k matrices from Pauli expansions.
+def bogoliubov_pseudospin_spectrum(coeff_x: float = 1.0,
+                                   coeff_y: float = 1.0,
+                                   coeff_z: float = 1.0) -> tuple[float, float]:
+    """Calculates the Bogoliubov excitation spectrum from pseudo-spin coefficients.
 
-    This class provides a convenient interface to build a Hermitian H_k matrix
-    by specifying the coefficients of its expansion in the basis of the
-    identity and Pauli matrices.
+    This function models the energy spectrum of a system described by a
+    Bogoliubov-de Gennes (BdG) Hamiltonian in a pseudo-spin representation.
+    The positive and negative branches of the spectrum correspond to the
+    excitation energies of quasiparticles and quasiholes, respectively.
 
-    The constructed matrix has the form:
-    H_k = c_I * I + c_x * sigma_x + c_y * sigma_y + c_z * sigma_z
+    This is a common formulation in condensed matter physics for systems such as
+    superconductors or topological materials.
+
+    Args:
+        coeff_x: The coefficient for the x-component of the pseudo-spin.
+            This could physically correspond to a Zeeman field component, a
+            superconducting pairing term, etc.
+        coeff_y: The coefficient for the y-component of the pseudo-spin.
+        coeff_z: The coefficient for the z-component of the pseudo-spin.
+
+    Returns:
+        A tuple containing the positive and negative branches of the energy
+        spectrum (E, -E), representing the quasiparticle excitation energies.
     """
+    # In the BdG formalism, the calculated energy E represents the
+    # quasiparticle energy.
+    quasiparticle_energy = np.sqrt(coeff_x ** 2 + coeff_y ** 2 + coeff_z ** 2)
 
-    def __init__(self, k: float):
-        """Initializes the builder for a specific wave vector k.
+    # The Bogoliubov spectrum is symmetric, containing both positive
+    # (quasiparticle) and negative (quasihole) energy branches.
+    return quasiparticle_energy, -quasiparticle_energy
 
-        Args:
-            k (float): The wave vector for which H_k is being constructed.
-        """
-        self.k = k
-        # Initialize the coefficients (the "effective magnetic field" components)
-        self._coeffs = {'I': 0.0, 'x': 0.0, 'y': 0.0, 'z': 0.0}
-        self._spin = 0.5  # Pauli matrices are for spin-1/2
 
-    def add_identity(self, coefficient: Union[float, torch.Tensor]) -> 'HKBuilder':
-        """Adds a term proportional to the identity matrix.
+def xy_chain_bogoliubov_spectrum(k: Union[float, np.ndarray],
+                                jx: float = 1.0,
+                                jy: float = 0.0,
+                                h: float = 1.0,
+                                phi: float = 0.0) -> tuple[Union[float, np.ndarray], Union[float, np.ndarray]]:
+    """Calculates the Bogoliubov spectrum for the quantum XY chain.
 
-        Args:
-            coefficient (Union[float, torch.Tensor]): The coefficient c_I.
+    This function translates the physical parameters of the anisotropic quantum
+    XY chain in a transverse field into a set of effective pseudo-spin
+    coefficients. It then computes the quasiparticle energy spectrum based on
+    these coefficients.
 
-        Returns:
-            HKBuilder: The builder instance for method chaining.
-        """
-        self._coeffs['I'] += coefficient
-        return self
+    Args:
+        k: The wave vector (momentum). Can be a single float or a NumPy array
+           to compute the dispersion relation.
+        jx: The exchange coupling strength along the x-axis.
+        jy: The exchange coupling strength along the y-axis.
+        h: The strength of the transverse magnetic field.
+        phi: The anisotropy phase angle, which can introduce DMI-like terms.
 
-    def add_sigma_x(self, coefficient: Union[float, torch.Tensor]) -> 'HKBuilder':
-        """Adds a term proportional to the Pauli-X matrix.
+    Returns:
+        A tuple containing the positive (quasiparticle) and negative
+        (quasihole) branches of the energy spectrum for the given wave vector(s).
+    """
+    # Avoid division by zero if both couplings are zero.
+    if jx == 0 and jy == 0:
+        # In this case, the spectrum is simply from the transverse field.
+        # The pseudo-spin coefficients would be (0, 0, 2h).
+        quasiparticle_energy = 2 * h
+        return quasiparticle_energy, -quasiparticle_energy
 
-        Args:
-            coefficient (Union[float, torch.Tensor]): The coefficient c_x.
+    # Sum of exchange couplings.
+    j_sum = jx + jy
 
-        Returns:
-            HKBuilder: The builder instance for method chaining.
-        """
-        self._coeffs['x'] += coefficient
-        return self
+    # Dimensionless anisotropy parameter, chi.
+    anisotropy_param = (jx - jy) / j_sum
 
-    def add_sigma_y(self, coefficient: Union[float, torch.Tensor]) -> 'HKBuilder':
-        """Adds a term proportional to the Pauli-Y matrix.
+    # Map the XY chain parameters onto the pseudo-spin coefficients (x_k, y_k, z_k).
+    # These coefficients represent the effective field acting on the pseudo-spin.
+    pseudospin_coeff_x = -2 * anisotropy_param * j_sum * np.sin(2 * phi) * np.sin(k)
+    pseudospin_coeff_y = 2 * anisotropy_param * j_sum * np.cos(2 * phi) * np.sin(k)
+    pseudospin_coeff_z = 2 * (h - j_sum * np.cos(k))
 
-        Args:
-            coefficient (Union[float, torch.Tensor]): The coefficient c_y.
+    # Calculate the final spectrum using the core Bogoliubov function.
+    return bogoliubov_pseudospin_spectrum(
+        coeff_x=pseudospin_coeff_x,
+        coeff_y=pseudospin_coeff_y,
+        coeff_z=pseudospin_coeff_z
+    )
 
-        Returns:
-            HKBuilder: The builder instance for method chaining.
-        """
-        self._coeffs['y'] += coefficient
-        return self
 
-    def add_sigma_z(self, coefficient: Union[float, torch.Tensor]) -> 'HKBuilder':
-        """Adds a term proportional to the Pauli-Z matrix.
+def xy_chain_ground_energy(lattice_length: int = 4,
+                                           jx: float = 1.0,
+                                           jy: float = 0.0,
+                                           h: float = 1.0,
+                                           phi: float = 0.0,
+                                           use_abc: bool = True) -> float:
+    """Calculates the ground state energy of the quantum XY chain.
 
-        Args:
-            coefficient (Union[float, torch.Tensor]): The coefficient c_z.
+    This function computes the ground state energy by summing the Bogoliubov
+    quasiparticle excitation energies .
 
-        Returns:
-            HKBuilder: The builder instance for method chaining.
-        """
-        self._coeffs['z'] += coefficient
-        return self
+    The boundary conditions (PBC vs. ABC) determine the set of allowed wave
+    vectors (k) and may introduce boundary correction terms to the energy.
 
-    def build(self, dtype: torch.dtype = torch.complex128) -> torch.Tensor:
-        """Constructs and returns the final H_k matrix.
+    Args:
+        lattice_length: The number of sites in the 1D lattice (L).
+        jx: The exchange coupling strength along the x-axis.
+        jy: The exchange coupling strength along the y-axis.
+        h: The strength of the transverse magnetic field.
+        phi: The anisotropy phase angle.
+        use_abc: If False, uses Periodic Boundary Conditions (PBC). If True,
+            uses Anti-periodic Boundary Conditions (ABC) and applies a
+            boundary correction term.
 
-        Args:
-            dtype (torch.dtype, optional): The desired data type of the final
-                matrix. Defaults to torch.complex128.
+    Returns:
+        The calculated ground state energy of the model.
+    """
+    # 1. Generate the appropriate k-space based on boundary conditions.
+    k_space = generate_k_space(lattice_length, use_abc, positive_only=True)
 
-        Returns:
-            torch.Tensor: The fully constructed 2x2 H_k matrix.
-        """
-        # Retrieve the local Pauli matrices from your operator library
-        I = op.identity(self._spin)
-        sx = op.pauli_x(self._spin)
-        sy = op.pauli_y(self._spin)
-        sz = op.pauli_z(self._spin)
+    # 2. Calculate the spectrum for all k-points in a single vectorized call.
+    positive_energies, _ = xy_chain_bogoliubov_spectrum(
+        k=k_space, jx=jx, jy=jy, h=h, phi=phi
+    )
 
-        # Build the matrix from the collected coefficients
-        H_k = (self._coeffs['I'] * I +
-               self._coeffs['x'] * sx +
-               self._coeffs['y'] * sy +
-               self._coeffs['z'] * sz)
+    # 3. Sum the quasiparticle energies .
+    ground_energy = -np.sum(positive_energies)
 
-        return H_k.to(dtype)
+    # 4. Apply boundary corrections if necessary.
+    if not use_abc:
+        j_sum = jx + jy
+        ground_energy -= 2 * j_sum
+
+    return ground_energy
 

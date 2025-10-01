@@ -75,7 +75,9 @@ from .transform import (
 )
 from .hamiltonian import (
     Hamiltonian,
-    HKBuilder,
+    bogoliubov_pseudospin_spectrum,
+    xy_chain_bogoliubov_spectrum,
+    xy_chain_ground_energy,
 )
 from .models import (
     IsingModel,
@@ -88,7 +90,6 @@ from .models import (
     BoseHubbardModel2D,
     TJModel2D,
     KitaevHoneycombModel,
-    uniform_xy_chain_hk,
 )
 from .eigensolver import (
     lanczos_ground_state,
@@ -172,7 +173,9 @@ __all__ = [
     "to_global_operator",
     # hamiltonian
     "Hamiltonian",
-    "HKBuilder",
+    "bogoliubov_pseudospin_spectrum",
+    "xy_chain_bogoliubov_spectrum",
+    "xy_chain_ground_energy",
     # models
     "IsingModel",
     "IsingModel2D",
@@ -184,7 +187,6 @@ __all__ = [
     "BoseHubbardModel2D",
     "TJModel2D",
     "KitaevHoneycombModel",
-    "uniform_xy_chain_hk",
     # eigensolver
     "lanczos_ground_state",
     # domain

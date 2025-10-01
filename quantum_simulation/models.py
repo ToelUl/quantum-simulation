@@ -6,8 +6,7 @@ from typing import List, Callable, Dict, Any, Optional
 from IPython.display import display
 
 from . import operator as op
-from .hamiltonian import Hamiltonian, HKBuilder
-from . import domain
+from .hamiltonian import Hamiltonian
 
 
 class BaseModel(Hamiltonian):
@@ -899,42 +898,6 @@ class KitaevHoneycombModel(BaseHoneycombModel):
 
         return sp.Add(term1, term2, term3, evaluate=False)
 
-
-def uniform_xy_chain_hk(k: float, J_x: float, J_y: float, h: float, phase: float=0) -> torch.Tensor:
-    """
-    Constructs the H_k matrix for the uniform 1D XY model in a transverse field.
-
-    This function uses the HKBuilder to construct the matrix based on the
-    physically intuitive couplings J_x and J_y. The derivation is based on
-    the formulation in "The quantum Ising chain for beginners".
-
-    Args:
-        k (float): The wave vector.
-        J_x (float): The coupling strength in the x-direction.
-        J_y (float): The coupling strength in the y-direction.
-        h (float): The transverse field strength.
-        phase (float): An optional phase factor for the couplings. Default is 0.
-
-    Returns:
-        torch.Tensor: The 2x2 H_k matrix for the given parameters.
-    """
-    k_tensor = torch.tensor(k, dtype=torch.float64)
-    phase_tensor = torch.tensor(phase, dtype=torch.float64)
-
-    # Calculate coefficients for the Pauli matrix expansion
-    J = J_x + J_y
-    chi = (J_x - J_y) / J
-    x_k = -2 * chi * J * torch.sin(2 * phase_tensor) * torch.sin(k_tensor)
-    y_k = 2 * chi * J * torch.cos(2 * phase_tensor) * torch.sin(k_tensor)
-    z_k = 2 * (h - J * torch.cos(k_tensor))
-
-    # Use the builder to construct the matrix
-    builder = HKBuilder(k)
-    H_k = (builder.add_sigma_x(x_k)
-                  .add_sigma_y(y_k)
-                  .add_sigma_z(z_k)
-                  .build())
-    return H_k
 
 
 

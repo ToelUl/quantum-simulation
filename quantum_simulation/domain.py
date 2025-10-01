@@ -35,7 +35,7 @@ def generate_k_space(
         # For ABC, k = pi * (2n - 1) / L, where n = 1, 2, ..., L/2
         # This generates odd integer multiples of pi/L.
         n = np.arange(1, lattice_length // 2 + 1, dtype=int)
-        k_positive = (2 * n - 1) * np.pi / lattice_length
+        k_positive = (2.0 * n - 1.0) * np.pi / lattice_length
         if positive_only:
             return k_positive
         else:
@@ -46,9 +46,9 @@ def generate_k_space(
         if positive_only:
             # n ranges from 1 to L/2 - 1 to get positive, non-zero k.
             n = np.arange(1, lattice_length // 2, dtype=int)
-            return 2 * n * np.pi / lattice_length
+            return 2.0 * n * np.pi / lattice_length
         else:
             # n ranges from -L/2 + 1 to L/2 for the full Brillouin zone.
             n = np.arange(np.ceil(-lattice_length // 2) + 1,
                           np.floor(lattice_length // 2) + 1, dtype=int)
-            return 2 * n * np.pi / lattice_length
+            return 2.0 * n * np.pi / lattice_length
