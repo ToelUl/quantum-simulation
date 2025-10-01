@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import sympy as sp
 from typing import List, Callable, Dict, Any, Optional
@@ -36,9 +35,9 @@ class BaseModel(Hamiltonian):
         console using Unicode.
         """
         sp.init_printing(use_unicode=True)
-        symbolic_H = self.get_symbolic_hamiltonian()
+        symbolic_h = self.get_symbolic_hamiltonian()
         print("Symbolic Hamiltonian:")
-        sp.pprint(symbolic_H)
+        sp.pprint(symbolic_h)
 
     def display_hamiltonian(self):
         """
@@ -47,10 +46,10 @@ class BaseModel(Hamiltonian):
         """
         # Configure SymPy to output LaTeX that MathJax can render
         sp.init_printing(use_latex='mathjax')
-        symbolic_H = self.get_symbolic_hamiltonian()
+        symbolic_h = self.get_symbolic_hamiltonian()
         print("Symbolic Hamiltonian:")
         # The 'display' function from IPython is the key to rendering the object
-        display(symbolic_H)
+        display(symbolic_h)
 
 
 class BaseModel2D(BaseModel):
@@ -174,12 +173,12 @@ class HeisenbergModel(BaseModel):
     def __init__(
             self,
             lattice_length: int,
-            jx: float,
-            jy: float,
-            jz: float,
-            hx: float,
-            hy: float,
-            hz: float,
+            jx: float = 1,
+            jy: float = 1,
+            jz: float = 1,
+            hx: float = 0,
+            hy: float = 0,
+            hz: float = 0,
             pbc: bool = True,
     ):
         """
@@ -591,10 +590,10 @@ class BoseHubbardModel2D(BaseModel2D):
 
         # Define functions that return these pre-built matrices.
         # This is how we pass them to the SpinBosonTerm builder.
-        def n_op_func(spin):
+        def n_op_func():
             return n_local_op
 
-        def n_sq_op_func(spin):
+        def n_sq_op_func():
             return n_squared_local_op
 
         # Add the two parts of the on-site term for each site
@@ -671,10 +670,10 @@ class HubbardModel1D(BaseModel):
         # Our FermionTerm builder passes `lattice_length` from the Hamiltonian
         # instance (which is 2*L). However, our spinful operators expect the
         # *physical* lattice length (L). We create wrappers to pass the correct L.
-        def c_dag(i, spin):
-            return lambda site, length, conv: op.c_dag_j_spinful(site, spin, self.physical_L, conv)
-        def c(i, spin):
-            return lambda site, length, conv: op.c_j_spinful(site, spin, self.physical_L, conv)
+        def c_dag(spin_up_down: str):
+            return lambda site, length, conv: op.c_dag_j_spinful(site, spin_up_down, self.physical_L, conv)
+        def c(spin_up_down: str):
+            return lambda site, length, conv: op.c_j_spinful(site, spin_up_down, self.physical_L, conv)
 
         # --- Add Hopping Terms ---
         num_hoppings = self.physical_L if self.pbc else self.physical_L - 1
@@ -682,9 +681,9 @@ class HubbardModel1D(BaseModel):
             j = (i + 1) % self.physical_L
             for spin in ['up', 'down']:
                 # Term -t * c_{i,s}^dag c_{j,s}
-                self.add_fermion_term(-self.t, [c_dag(i, spin), c(j, spin)], [i, j])
+                self.add_fermion_term(-self.t, [c_dag(spin), c(spin)], [i, j])
                 # Term -t * c_{j,s}^dag c_{i,s} (h.c.)
-                self.add_fermion_term(-self.t, [c_dag(j, spin), c(i, spin)], [j, i])
+                self.add_fermion_term(-self.t, [c_dag(spin), c(spin)], [j, i])
 
         # --- Add On-site Interaction and Chemical Potential Terms ---
         for i in range(self.physical_L):
@@ -692,16 +691,16 @@ class HubbardModel1D(BaseModel):
             # n_{i,up} = c_{i,up}^dag c_{i,up}
             # n_{i,down} = c_{i,down}^dag c_{i,down}
             if abs(self.u) > 1e-12:
-                ops_U = [c_dag(i, 'up'), c(i, 'up'), c_dag(i, 'down'), c(i, 'down')]
+                ops_U = [c_dag('up'), c('up'), c_dag('down'), c('down')]
                 sites_U = [i, i, i, i]
                 self.add_fermion_term(self.u, ops_U, sites_U)
 
             # Chemical potential term: -mu * (n_{i,up} + n_{i,down})
             if abs(self.mu) > 1e-12:
                 # Up spin part: -mu * n_{i,up}
-                self.add_fermion_term(-self.mu, [c_dag(i, 'up'), c(i, 'up')], [i, i])
+                self.add_fermion_term(-self.mu, [c_dag('up'), c('up')], [i, i])
                 # Down spin part: -mu * n_{i,down}
-                self.add_fermion_term(-self.mu, [c_dag(i, 'down'), c(i, 'down')], [i, i])
+                self.add_fermion_term(-self.mu, [c_dag('down'), c('down')], [i, i])
 
     def get_symbolic_hamiltonian(self) -> sp.Expr:
         """Generates the symbolic formula for the 1D Hubbard model."""
@@ -768,14 +767,14 @@ class TJModel2D(BaseModel2D):
         self.lattice_length = total_jw_length  # Set this for the builder
 
         # --- Define wrapper functions for spinful operators ---
-        def c_dag(i, spin):
-            return lambda site, length, conv: op.c_dag_j_spinful(site, spin, self.physical_L, conv)
+        def c_dag(spin_up_down: str):
+            return lambda site, length, conv: op.c_dag_j_spinful(site, spin_up_down, self.physical_L, conv)
 
-        def c(i, spin):
-            return lambda site, length, conv: op.c_j_spinful(site, spin, self.physical_L, conv)
+        def c(spin_up_down: str):
+            return lambda site, length, conv: op.c_j_spinful(site, spin_up_down, self.physical_L, conv)
 
-        def n(i, spin):
-            return lambda site, length, conv: op.n_j_spinful(site, spin, self.physical_L, conv)
+        def n(spin_up_down: str):
+            return lambda site, length, conv: op.n_j_spinful(site, spin_up_down, self.physical_L, conv)
 
         # --- Build terms for each nearest-neighbor pair ---
         for y in range(self.physical_H):
@@ -796,26 +795,26 @@ class TJModel2D(BaseModel2D):
                         # S_z = 0.5 * (n_up - n_down)
                         # S_i^z S_j^z = 0.25 * (n_i_up - n_i_dn)(n_j_up - n_j_dn)
                         # Expands to: 0.25 * (n_i_up*n_j_up - n_i_up*n_j_dn - n_i_dn*n_j_up + n_i_dn*n_j_dn)
-                        self.add_fermion_term(0.25 * self.j_exch, [n(i, 'up'), n(j, 'up')], [i, j])
-                        self.add_fermion_term(-0.25 * self.j_exch, [n(i, 'up'), n(j, 'dn')], [i, j])
-                        self.add_fermion_term(-0.25 * self.j_exch, [n(i, 'dn'), n(j, 'up')], [i, j])
-                        self.add_fermion_term(0.25 * self.j_exch, [n(i, 'dn'), n(j, 'dn')], [i, j])
+                        self.add_fermion_term(0.25 * self.j_exch, [n('up'), n('up')], [i, j])
+                        self.add_fermion_term(-0.25 * self.j_exch, [n('up'), n('dn')], [i, j])
+                        self.add_fermion_term(-0.25 * self.j_exch, [n('dn'), n('up')], [i, j])
+                        self.add_fermion_term(0.25 * self.j_exch, [n('dn'), n('dn')], [i, j])
 
                         # S_i^x S_j^x + S_i^y S_j^y = 0.5 * (S_i^+ S_j^- + S_i^- S_j^+)
                         # S_i^+ = c_i_up^dag c_i_dn
                         # S_i^- = c_i_dn^dag c_i_up
                         # 0.5 * (c_i_up^dag c_i_dn c_j_dn^dag c_j_up + c_i_dn^dag c_i_up c_j_up^dag c_j_dn)
                         self.add_fermion_term(0.5 * self.j_exch,
-                                              [c_dag(i, 'up'), c(i, 'dn'), c_dag(j, 'dn'), c(j, 'up')], [i, i, j, j])
+                                              [c_dag('up'), c('dn'), c_dag('dn'), c('up')], [i, i, j, j])
                         self.add_fermion_term(0.5 * self.j_exch,
-                                              [c_dag(i, 'dn'), c(i, 'up'), c_dag(j, 'up'), c(j, 'dn')], [i, i, j, j])
+                                              [c_dag('dn'), c('up'), c_dag('up'), c('dn')], [i, i, j, j])
 
                         # -J/4 * n_i * n_j = -J/4 * (n_i_up + n_i_dn)(n_j_up + n_j_dn)
                         # Expands to: -J/4 * (n_i_up*n_j_up + n_i_up*n_j_dn + n_i_dn*n_j_up + n_i_dn*n_j_dn)
-                        self.add_fermion_term(-0.25 * self.j_exch, [n(i, 'up'), n(j, 'up')], [i, j])
-                        self.add_fermion_term(-0.25 * self.j_exch, [n(i, 'up'), n(j, 'dn')], [i, j])
-                        self.add_fermion_term(-0.25 * self.j_exch, [n(i, 'dn'), n(j, 'up')], [i, j])
-                        self.add_fermion_term(-0.25 * self.j_exch, [n(i, 'dn'), n(j, 'dn')], [i, j])
+                        self.add_fermion_term(-0.25 * self.j_exch, [n('up'), n('up')], [i, j])
+                        self.add_fermion_term(-0.25 * self.j_exch, [n('up'), n('dn')], [i, j])
+                        self.add_fermion_term(-0.25 * self.j_exch, [n('dn'), n('up')], [i, j])
+                        self.add_fermion_term(-0.25 * self.j_exch, [n('dn'), n('dn')], [i, j])
 
                     # --- t-term: -t * sum_{s} (P c_{i,s}^dag c_{j,s} P + h.c.) ---
                     # P c_{i,s}^dag c_{j,s} P is implemented as (1-n_{i,-s}) c_{i,s}^dag c_{j,s} (1-n_{j,-s})
@@ -833,13 +832,13 @@ class TJModel2D(BaseModel2D):
 
                             # Forward hopping: j -> i for spin
                             # -t * c_{i,s}^dag * (1-n_{i,-s}) * c_{j,s}
-                            self.add_fermion_term(-self.t, [c_dag(i, spin), c(j, spin)], [i, j])
-                            self.add_fermion_term(self.t, [c_dag(i, spin), n(i, opp_spin), c(j, spin)], [i, i, j])
+                            self.add_fermion_term(-self.t, [c_dag(spin), c(spin)], [i, j])
+                            self.add_fermion_term(self.t, [c_dag(spin), n(opp_spin), c(spin)], [i, i, j])
 
                             # Backward hopping: i -> j for spin (h.c.)
                             # -t * c_{j,s}^dag * (1-n_{j,-s}) * c_{i,s}
-                            self.add_fermion_term(-self.t, [c_dag(j, spin), c(i, spin)], [j, i])
-                            self.add_fermion_term(self.t, [c_dag(j, spin), n(j, opp_spin), c(i, spin)], [j, j, i])
+                            self.add_fermion_term(-self.t, [c_dag(spin), c(spin)], [j, i])
+                            self.add_fermion_term(self.t, [c_dag(spin), n(opp_spin), c(spin)], [j, j, i])
 
     def get_symbolic_hamiltonian(self) -> sp.Expr:
         t, J, sigma = sp.symbols("t J sigma")
