@@ -147,12 +147,12 @@ def total_number_operator(lattice_length=2, convention="down=1"):
     return n
 
 
-def c_j_spinful(i, spin, lattice_length, convention="down=1"):
+def c_j_spinful(i, spin_up_down, lattice_length, convention="down=1"):
     """
     Annihilation operator for a fermion at physical site <i> with spin <spin>.
     'spin' can be 'up' (0) or 'down' (1).
     """
-    spin_offset = 0 if spin == 'up' else 1
+    spin_offset = 0 if spin_up_down == 'up' else 1
     k = 2 * i + spin_offset
     total_length = 2 * lattice_length
 
@@ -160,12 +160,12 @@ def c_j_spinful(i, spin, lattice_length, convention="down=1"):
         k, total_length, b_(convention=convention), convention)
 
 
-def c_dag_j_spinful(i, spin, lattice_length, convention="down=1"):
+def c_dag_j_spinful(i, spin_up_down, lattice_length, convention="down=1"):
     """
     Creation operator for a fermion at physical site <i> with spin <spin>.
     'spin' can be 'up' (0) or 'down' (1).
     """
-    spin_offset = 0 if spin == 'up' else 1
+    spin_offset = 0 if spin_up_down == 'up' else 1
     k = 2 * i + spin_offset
     total_length = 2 * lattice_length
 
