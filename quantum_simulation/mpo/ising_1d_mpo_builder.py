@@ -6,65 +6,114 @@ The Hamiltonian is defined as:
 H = -J * Σ_{i} S^x_i S^x_{i+1} - g * Σ_{i} S^z_i
 """
 
+from typing import List, Optional, Any
+import torch
+import torch.nn as nn
 from .auto_mpo import FSM, NamedData, generate_mpo_spin_operators
+from .mpo_to_torch import build_mpo_torch
 
-class Ising1DMPOBuilder:
-    """Builds the MPO for the 1D transverse-field Ising chain.
+
+class Ising1DMPOBuilder(nn.Module):
+    """Builds the MPO for the 1D transverse-field Ising chain as a PyTorch Module.
+
+    This class uses the 'auto_mpo' Finite-State Machine (FSM) to construct the
+    Matrix Product Operator (MPO) for the 1D transverse-field Ising model.
+    The resulting MPO tensors are stored as a `torch.nn.ParameterList`.
+
+    The Hamiltonian is:
+    H = -J * Σ_{i} S^x_i S^x_{i+1} - g * Σ_{i} S^z_i
 
     Attributes:
         num_sites (int): The number of sites in the chain.
         j_coupling (float): The nearest-neighbor coupling strength (J).
         g_field (float): The transverse field strength (g).
-        fsm (FSM): The Finite-State Machine instance for MPO construction.
+        fsm (FSM): The FSM instance used for the MPO construction.
+        mpo (nn.ParameterList): The list of MPO tensors as PyTorch Parameters.
     """
 
-    def __init__(self, num_sites: int, j_coupling: float, g_field: float):
-        """Initializes the builder with model parameters.
+    def __init__(self,
+                 num_sites: int,
+                 j_coupling: float,
+                 g_field: float,
+                 device: Optional[Any] = None,
+                 dtype: Optional[torch.dtype] = None):
+        """Initializes the builder with model parameters and constructs the MPO.
 
         Args:
             num_sites (int): The length of the spin chain.
             j_coupling (float): The coefficient for the S^x S^x interaction.
             g_field (float): The coefficient for the S^z transverse field.
+            device (Optional[Any]): The PyTorch device to store the MPO tensors
+                on (e.g., 'cpu', 'cuda:0').
+            dtype (Optional[torch.dtype]): The PyTorch data type for the MPO
+                tensors (e.g., torch.complex128).
         """
+        super().__init__()
+
         self.num_sites = num_sites
         self.j_coupling = j_coupling
         self.g_field = g_field
-        self.fsm = None
 
+        # Step 1: Initialize NumPy-based operators for the FSM builder.
         self._initialize_operators()
-        self.build_fsm()
+
+        # Step 2: Build the FSM graph for the Hamiltonian.
+        self.fsm = self._build_fsm()
+
+        # Step 3: Generate the MPO as a list of NumPy arrays from the FSM.
+        mpo_np = self.fsm.to_mpo()
+
+        # Step 4: Convert NumPy MPO to PyTorch tensors and register them.
+        mpo_torch = build_mpo_torch(mpo_np, dtype=dtype, device=device)
+        self.mpo = nn.ParameterList([nn.Parameter(tensor, requires_grad=False) for tensor in mpo_torch])
 
     def _initialize_operators(self):
-        """Generates and stores the required spin-1/2 operators."""
-        # For spin-1/2, the local Hilbert space dimension is 2.
+        """Generates and stores the required spin-1/2 operators as NamedData."""
         ops = generate_mpo_spin_operators(spin_dim=2)
         self.s_x = NamedData('Sx', ops['Sx'])
         self.s_z = NamedData('Sz', ops['Sz'])
-        self.identity = NamedData('Id', ops['Id'])
 
-    def build_fsm(self):
-        """Constructs the Finite-State Machine for the Hamiltonian."""
-        self.fsm = FSM(self.num_sites)
+    def _build_fsm(self) -> FSM:
+        """Constructs and returns the FSM for the 1D Ising Hamiltonian.
+
+        Returns:
+            FSM: The populated FSM instance representing the Ising model.
+        """
+        fsm = FSM(site_num=self.num_sites)
 
         for i in range(self.num_sites):
             # Add the on-site transverse field term: -g * S^z_i
-            self.fsm.add_term(-self.g_field, [self.s_z], [i])
+            fsm.add_term(-self.g_field, [self.s_z], [i])
 
             # Add the nearest-neighbor interaction term: -J * S^x_i * S^x_{i+1}
-            # This is only added for sites i where a neighbor i+1 exists.
             if i < self.num_sites - 1:
-                self.fsm.add_term(-self.j_coupling, [self.s_x, self.s_x], [i, i + 1])
+                fsm.add_term(-self.j_coupling, [self.s_x, self.s_x], [i, i + 1])
+        return fsm
 
-    def get_mpo(self):
-        """Generates and returns the numerical MPO tensors."""
-        return self.fsm.to_mpo()
+    def forward(self) -> List[torch.Tensor]:
+        """Returns the constructed MPO as a list of PyTorch tensors.
+
+        Returns:
+            List[torch.Tensor]: The list containing the MPO tensors.
+        """
+        return list(self.mpo)
+
+    def get_mpo(self) -> List[torch.Tensor]:
+        """Returns the numerical MPO tensors as a list of torch.Tensors.
+
+        This method is kept for compatibility with the original API.
+
+        Returns:
+            List[torch.Tensor]: The list containing the MPO tensors.
+        """
+        return self.forward()
 
     def display_bond_dimensions(self):
         """Prints the bond dimensions of the MPO."""
-        print("=" * 40)
+        print("=" * 50)
         print("1D Transverse-Field Ising Model MPO")
         print(f"N={self.num_sites}, J={self.j_coupling}, g={self.g_field}")
-        print("=" * 40)
+        print("=" * 50)
         self.fsm.print_bond_dimensions()
 
 
@@ -74,8 +123,27 @@ if __name__ == '__main__':
     J = 1.0
     g = 0.5
 
-    ising_1d_builder = Ising1DMPOBuilder(num_sites=N, j_coupling=J, g_field=g)
-    ising_1d_builder.display_bond_dimensions()
+    # Instantiate the builder. The MPO is created upon initialization.
+    ising_1d_builder = Ising1DMPOBuilder(
+        num_sites=N,
+        j_coupling=J,
+        g_field=g,
+        device='cpu'
+    )
 
-    # The bond dimensions should be [1, 3, 3, ..., 3, 1]
-    # This reflects the simple nearest-neighbor structure.
+    # Display the bond dimensions derived from the FSM.
+    ising_1d_builder.display_bond_dimensions()
+    # The expected bond dimensions should be [1, 3, 3, ..., 3, 1].
+
+    # Retrieve the MPO as a list of PyTorch tensors.
+    mpo_tensors = ising_1d_builder.get_mpo()
+
+    # --- Verification ---
+    print("\n--- Verification of PyTorch MPO ---")
+    print(f"Number of MPO tensors: {len(mpo_tensors)}")
+    if mpo_tensors:
+        first_tensor = mpo_tensors[0]
+        print(f"Type of the first tensor: {type(first_tensor)}")
+        print(f"Shape of the first tensor: {first_tensor.shape}")
+        print(f"Data type of the first tensor: {first_tensor.dtype}")
+        print(f"Device of the first tensor: {first_tensor.device}")

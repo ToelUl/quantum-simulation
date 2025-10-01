@@ -100,6 +100,11 @@ from .eigensolver import (
 )
 from .domain import generate_k_space
 from .ncon_torch import ncon_torch
+from .mps import MPS
+from .dmrg import (
+    DMRG,
+    Sweeps,
+)
 from .visualization import (
     show_matrix,
     jordan_wigner_transform_symbolize,
@@ -201,6 +206,10 @@ __all__ = [
     "generate_k_space",
     # ncon
     "ncon_torch",
+    # tensor network
+    'MPS',
+    'DMRG',
+    'Sweeps',
     # visualization
     'show_matrix',
     'jordan_wigner_transform_symbolize',
