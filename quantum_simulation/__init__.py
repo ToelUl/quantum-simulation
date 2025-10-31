@@ -78,6 +78,9 @@ from .transform import (
     lattice_inverse_fourier_transform_1d,
     to_global_operator,
 )
+from .dynamic import (
+    tf_xy_chain_mz_instant_quench,
+)
 from .hamiltonian import (
     Hamiltonian,
 )
@@ -190,6 +193,8 @@ __all__ = [
     "lattice_fourier_transform_1d",
     "lattice_inverse_fourier_transform_1d",
     "to_global_operator",
+    # dynamic
+    "tf_xy_chain_mz_instant_quench",
     # hamiltonian
     "Hamiltonian",
     # models
