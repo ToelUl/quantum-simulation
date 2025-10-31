@@ -2,7 +2,11 @@ from .group import (
     LieAlgebraBase,
     LieGroupBase,
     SU2LieAlgebra,
-    SU2Group
+    SU2Group,
+    frob_inner,
+    structure_constants,
+    lie_closure_basis,
+    check_cartan_decomp,
 )
 from .mpo import (
     FSM,
