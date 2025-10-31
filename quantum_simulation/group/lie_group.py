@@ -25,8 +25,8 @@ class SU2LieAlgebra(LieAlgebraBase):
         super().__init__(rep_dim=rep_dim, lie_alg_dim=lie_alg_dim)
 
         # Generate spin matrices
-        self.S_z = self._generate_S_z()
-        self.S_plus, self.S_minus = self._generate_S_plus_minus()
+        self.S_z = self._generate_sz()
+        self.S_plus, self.S_minus = self._generate_s_plus_minus()
         self.S_x = 0.5 * (self.S_plus + self.S_minus)
         self.S_y = (self.S_plus - self.S_minus) / 2j
 
@@ -41,7 +41,7 @@ class SU2LieAlgebra(LieAlgebraBase):
         self.e_3 = -1j * self.S_z
         self.generators_list = [self.e_1, self.e_2, self.e_3]
 
-    def _generate_S_z(self) -> torch.Tensor:
+    def _generate_sz(self) -> torch.Tensor:
         """
         Generate the S_z matrix.
 
@@ -52,7 +52,7 @@ class SU2LieAlgebra(LieAlgebraBase):
         m_values = torch.tensor([self.spin - i for i in range(dim)], dtype=torch.complex64, requires_grad=False)
         return torch.diag(m_values)
 
-    def _generate_S_plus_minus(self) -> tuple:
+    def _generate_s_plus_minus(self) -> tuple:
         """
         Generate the S_+ and S_- matrices.
 
@@ -60,22 +60,22 @@ class SU2LieAlgebra(LieAlgebraBase):
             tuple: A tuple (S_plus, S_minus) of tensors.
         """
         dim = int(2 * self.spin + 1)
-        S_plus = torch.zeros((dim, dim), dtype=torch.complex64, requires_grad=False)
+        sp = torch.zeros((dim, dim), dtype=torch.complex64, requires_grad=False)
         for i in range(dim - 1):
             j = self.spin - i  # Corresponds to m = s - i
             b_j = np.sqrt((self.spin + j) * (self.spin + 1 - j))
-            S_plus[i, i + 1] = b_j
-        S_minus = S_plus.transpose(-2, -1)
-        return S_plus, S_minus
+            sp[i, i + 1] = b_j
+        sm = sp.transpose(-2, -1)
+        return sp, sm
 
-    def generators(self) -> list:
+    def generators(self) -> torch.Tensor:
         """
-        Return the generators e_j = -i * S_j.
+        Return the generators of the Lie algebra.
 
         Returns:
-            list[torch.Tensor]: List of generator tensors.
+            torch.Tensor: A tensor of shape (3, rep_dim, rep_dim) containing the generators.
         """
-        return self.generators_list
+        return torch.stack(self.generators_list)
 
     def get_spin_operators(self) -> tuple:
         """
@@ -102,6 +102,79 @@ class SU2LieAlgebra(LieAlgebraBase):
         f[0, 2, 1] = -1.0
         return f
 
+    def is_traceless(self, a: torch.Tensor) -> bool:
+        """
+        Check whether a Lie algebra element is traceless.
+
+        Args:
+            a (torch.Tensor): Lie algebra element.
+
+        Returns:
+            bool: True if "a" is traceless, False otherwise.
+
+        Raises:
+            ValueError: If "a" does not have the correct shape.
+        """
+        if a.shape[-2:] != (self.rep_dim, self.rep_dim):
+            raise ValueError(f"Lie algebra element must have shape (..., {self.rep_dim}, {self.rep_dim}).")
+        trace = torch.einsum("...ii->...", a)
+        return torch.allclose(trace, torch.zeros_like(trace), atol=1e-4)
+
+    def inner_product(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the inner product of two Lie algebra elements.
+
+        Args:
+            a (torch.Tensor): First Lie algebra element.
+            b (torch.Tensor): Second Lie algebra element.
+
+        Returns:
+            torch.Tensor: The inner product ⟨a, b⟩.
+
+        Raises:
+            ValueError: If a and b do not have the correct shapes.
+        """
+        if a.shape[-2:] != (self.rep_dim, self.rep_dim):
+            raise ValueError(f"Lie algebra element 'a' must have shape (..., {self.rep_dim}, {self.rep_dim}).")
+        if b.shape[-2:] != (self.rep_dim, self.rep_dim):
+            raise ValueError(f"Lie algebra element 'b' must have shape (..., {self.rep_dim}, {self.rep_dim}).")
+        prod = torch.einsum("...ij,...ji->...", a.conj().transpose(-2,-1), b)
+        return prod / np.sum(np.arange(-self.spin, self.spin + 1) ** 2)
+
+    def is_orthogonal(self, a: torch.Tensor, b: torch.Tensor) -> bool:
+        """
+        Check whether two Lie algebra elements are orthogonal.
+
+        Args:
+            a (torch.Tensor): First Lie algebra element.
+            b (torch.Tensor): Second Lie algebra element.
+
+        Returns:
+            bool: True if ⟨a, b⟩ = 0, False otherwise.
+
+        Raises:
+            ValueError: If a and b do not have the correct shapes.
+        """
+        inner_prod = self.inner_product(a, b)
+        return torch.allclose(inner_prod, torch.zeros_like(inner_prod), atol=1e-4)
+
+    def is_anti_hermitian(self, a: torch.Tensor) -> bool:
+        """
+        Check whether a Lie algebra element is anti-Hermitian.
+
+        Args:
+            a (torch.Tensor): Lie algebra element.
+
+        Returns:
+            bool: True if a is anti-Hermitian, False otherwise.
+
+        Raises:
+            ValueError: If a does not have the correct shape.
+        """
+        if a.shape[-2:] != (self.rep_dim, self.rep_dim):
+            raise ValueError(f"Lie algebra element must have shape (..., {self.rep_dim}, {self.rep_dim}).")
+        return torch.allclose(a.conj().transpose(-2, -1), -a, atol=1e-4)
+
 
 class SU2Group(LieGroupBase):
     """Implementation of the SU(2) Lie group with arbitrary spin representation."""
@@ -125,18 +198,6 @@ class SU2Group(LieGroupBase):
         self.spin = spin
         self.algebra = algebra
 
-    def elements(self) -> torch.Tensor:
-        """
-        Return a tensor containing group elements.
-
-        Note:
-            SU(2) is continuous; listing all elements is not feasible.
-
-        Raises:
-            NotImplementedError: Always raised for continuous groups.
-        """
-        raise NotImplementedError("Continuous group; cannot list all elements.")
-
     def product(self, g1: torch.Tensor, g2: torch.Tensor) -> torch.Tensor:
         """
         Compute the product of two SU(2) group elements.
@@ -153,7 +214,7 @@ class SU2Group(LieGroupBase):
         """
         if g1.shape != g2.shape:
             raise ValueError("Group elements g1 and g2 must have the same shape.")
-        return torch.matmul(g1, g2) if g1.dim() == 2 else torch.bmm(g1, g2)
+        return torch.matmul(g1, g2) if g1.dim() == 2 else torch.einsum("...ij,...jk->...ik", g1, g2)
 
     def inverse(self, g: torch.Tensor) -> torch.Tensor:
         """
@@ -172,7 +233,8 @@ class SU2Group(LieGroupBase):
         Map a Lie algebra element to a group element via the exponential map.
 
         Args:
-            a (torch.Tensor): Real coefficients with shape (..., 3).
+            a (torch.Tensor): Real coefficients with shape (..., 3). The Lie algebra element is given by
+                a[..., 0] * e_1 + a[..., 1] * e_2 + a[..., 2] * e_3, where e_j are the generators.
 
         Returns:
             torch.Tensor: The corresponding group element with shape (..., rep_dim, rep_dim).
@@ -189,7 +251,7 @@ class SU2Group(LieGroupBase):
         alge_elem = a[..., 0, None, None] * e1 + a[..., 1, None, None] * e2 + a[..., 2, None, None] * e3
         return torch.matrix_exp(alge_elem)
 
-    def left_action_on_Cn(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    def left_action(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         """
         Apply the left group action on a vector x in ℂⁿ (n = 2s + 1) using torch.matmul.
 
@@ -199,6 +261,9 @@ class SU2Group(LieGroupBase):
 
         Returns:
             torch.Tensor: The transformed vector with shape (..., rep_dim).
+
+        Raises:
+            ValueError: If g or x do not have the correct shapes.
         """
         if g.shape[-2:] != (self.rep_dim, self.rep_dim):
             raise ValueError(f"Group element must have shape (..., {self.rep_dim}, {self.rep_dim}).")
@@ -209,7 +274,7 @@ class SU2Group(LieGroupBase):
         else:
             return torch.einsum("...ij,...j->...i", g, x)
 
-    def right_action_on_Cn(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    def right_action(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         """
         Apply the right group action on a dual vector x in ℂⁿ (n = 2s + 1) using torch.matmul.
 
@@ -219,6 +284,9 @@ class SU2Group(LieGroupBase):
 
         Returns:
             torch.Tensor: The transformed dual vector with shape (..., rep_dim).
+
+        Raises:
+            ValueError: If g or x do not have the correct shapes.
         """
         if g.shape[-2:] != (self.rep_dim, self.rep_dim):
             raise ValueError(f"Group element must have shape (..., {self.rep_dim}, {self.rep_dim}).")
@@ -229,6 +297,25 @@ class SU2Group(LieGroupBase):
             return torch.einsum("...ij,...jk->...ik", x, g_inv)
         else:
             return torch.einsum("...i,...ij->...j", x, g_inv)
+
+    def adjoint_action(self, g: torch.Tensor, alge_elem: torch.Tensor) -> torch.Tensor:
+        """
+        Apply the adjoint action of the group on a Lie algebra element.
+
+        Args:
+            g (torch.Tensor): Group element.
+            alge_elem (torch.Tensor): Lie algebra element.
+
+        Returns:
+            torch.Tensor: The transformed Lie algebra element.
+
+        Raises:
+            ValueError: If g or alge_elem do not have the correct shapes.
+        """
+        if g.shape[-2:] != (self.rep_dim, self.rep_dim):
+            raise ValueError(f"Group element must have shape (..., {self.rep_dim}, {self.rep_dim}).")
+        g_inv = self.inverse(g)
+        return torch.einsum("...ij,...jk,...kl->...il", g, alge_elem, g_inv)
 
     def random_element(
         self,
@@ -263,3 +350,38 @@ class SU2Group(LieGroupBase):
             return self.exponential_map(a)
         else:
             return a
+
+    def is_unitary(self, g: torch.Tensor) -> bool:
+        """
+        Check whether a group element is unitary.
+
+        Args:
+            g (torch.Tensor): Group element.
+
+        Returns:
+            bool: True if g is unitary, False otherwise.
+
+        Raises:
+            ValueError: If g does not have the correct shape.
+        """
+        if g.shape[-len(self.element_shape):] != self.element_shape:
+            raise ValueError(f"Group element must have shape (..., {self.element_shape}).")
+        if self.element_shape == ():
+            return torch.allclose(torch.abs(g), torch.tensor(1.0, dtype=g.dtype, device=g.device), atol=1e-4)
+        else:
+            identity = self.identity.expand_as(g)
+            return torch.allclose(torch.einsum("...ij,...jk->...ik", self.inverse(g), g), identity, atol=1e-4)
+
+    def is_determinant_one(self, g: torch.Tensor) -> bool:
+        """
+        Check whether the determinant of a group element is 1.
+
+        Args:
+            g (torch.Tensor): Group element.
+
+        Returns:
+            bool: True if det(g) == 1, False otherwise.
+        """
+        det = self.determinant(g)
+        det_abs = det.abs() if det.is_complex() else det
+        return torch.allclose(det_abs, torch.tensor(1.0, dtype=det_abs.dtype, device=det.device), atol=1e-4)
