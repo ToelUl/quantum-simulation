@@ -36,23 +36,23 @@ class LieAlgebraBase(torch.nn.Module):
         raise NotImplementedError("This method should be overridden by subclasses.")
 
     @staticmethod
-    def commutator(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    def lie_bracket(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         """
-        Compute the commutator [a, b] = a * b - b * a.
+        Compute the Lie bracket [a, b] = ab - ba.
 
         Args:
-            a (torch.Tensor): Generator a.
-            b (torch.Tensor): Generator b.
+            a (torch.Tensor): First Lie algebra element.
+            b (torch.Tensor): Second Lie algebra element.
 
         Returns:
-            torch.Tensor: The commutator [a, b].
+            torch.Tensor: The Lie bracket [a, b].
 
         Raises:
-            ValueError: If a and b do not have the same shape.
+            ValueError: If a and b have incompatible shapes for matrix multiplication.
         """
-        if a.shape != b.shape:
-            raise ValueError("Generators a and b must have the same shape.")
-        return torch.matmul(a, b) - torch.matmul(b, a)
+        if a.shape[-1] != b.shape[-2] or a.shape[-2] != b.shape[-1]:
+            raise ValueError("Incompatible shapes for matrix multiplication.")
+        return torch.einsum("...ij,...jk->...ik", a, b) - torch.einsum("...ij,...jk->...ik", b, a)
 
     def structure_constants(self) -> torch.Tensor:
         """
@@ -93,19 +93,19 @@ class LieGroupBase(torch.nn.Module):
 
         if identity.shape != self.element_shape:
             raise ValueError(f"Identity must be a tensor of shape {self.element_shape}.")
-        self.register_buffer("identity", identity)
+        self.identity = identity
 
-    def elements(self) -> torch.Tensor:
-        """
-        Return a tensor containing group elements.
-
-        Returns:
-            torch.Tensor: A tensor containing group elements.
-
-        Raises:
-            NotImplementedError: Must be overridden by subclasses.
-        """
-        raise NotImplementedError("This method should be overridden by subclasses.")
+    # def elements(self) -> torch.Tensor:
+    #     """
+    #     Return a tensor containing group elements.
+    #
+    #     Returns:
+    #         torch.Tensor: A tensor containing group elements.
+    #
+    #     Raises:
+    #         NotImplementedError: Must be overridden by subclasses.
+    #     """
+    #     raise NotImplementedError("This method should be overridden by subclasses.")
 
     def product(self, g1: torch.Tensor, g2: torch.Tensor) -> torch.Tensor:
         """
@@ -153,7 +153,7 @@ class LieGroupBase(torch.nn.Module):
         """
         raise NotImplementedError("This method should be overridden by subclasses.")
 
-    def left_action_on_Cn(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    def left_action(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         """
         Apply the group left action on vectors in ℂⁿ.
 
@@ -169,7 +169,7 @@ class LieGroupBase(torch.nn.Module):
         """
         raise NotImplementedError("This method should be overridden by subclasses.")
 
-    def right_action_on_Cn(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    def right_action(self, g: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         """
         Apply the right group action of the inverse of g on a dual vector in ℂⁿ.
 
@@ -179,6 +179,22 @@ class LieGroupBase(torch.nn.Module):
 
         Returns:
             torch.Tensor: The transformed dual vector.
+
+        Raises:
+            NotImplementedError: Must be overridden by subclasses.
+        """
+        raise NotImplementedError("This method should be overridden by subclasses.")
+
+    def adjoint_action(self, g: torch.Tensor, alge_elem: torch.Tensor) -> torch.Tensor:
+        """
+        Apply the adjoint action of the group on a Lie algebra element.
+
+        Args:
+            g (torch.Tensor): Group element.
+            alge_elem (torch.Tensor): Lie algebra element.
+
+        Returns:
+            torch.Tensor: The transformed Lie algebra element.
 
         Raises:
             NotImplementedError: Must be overridden by subclasses.
@@ -206,41 +222,6 @@ class LieGroupBase(torch.nn.Module):
             return g.squeeze(-1).squeeze(-1)
         else:
             return torch.det(g)
-
-    def is_unitary(self, g: torch.Tensor) -> bool:
-        """
-        Check whether a group element is unitary.
-
-        Args:
-            g (torch.Tensor): Group element.
-
-        Returns:
-            bool: True if g is unitary, False otherwise.
-
-        Raises:
-            ValueError: If g does not have the correct shape.
-        """
-        if g.shape[-len(self.element_shape):] != self.element_shape:
-            raise ValueError(f"Group element must have shape (..., {self.element_shape}).")
-        if self.element_shape == ():
-            return torch.allclose(torch.abs(g), torch.tensor(1.0, dtype=g.dtype, device=g.device), atol=1e-6)
-        else:
-            identity = self.identity.expand_as(g)
-            return torch.allclose(g.conj().transpose(-2, -1) @ g, identity, atol=1e-6)
-
-    def is_determinant_one(self, g: torch.Tensor) -> bool:
-        """
-        Check whether the determinant of a group element is 1.
-
-        Args:
-            g (torch.Tensor): Group element.
-
-        Returns:
-            bool: True if det(g) == 1, False otherwise.
-        """
-        det = self.determinant(g)
-        det_abs = det.abs() if det.is_complex() else det
-        return torch.allclose(det_abs, torch.tensor(1.0, dtype=det_abs.dtype, device=det.device), atol=1e-6)
 
     def random_element(
             self,
