@@ -69,6 +69,7 @@ from .operation import (
     commutator,
     anti_commutator,
     bra_o_ket,
+    complex_einsum,
 )
 from .transform import (
     jordan_wigner_transform_1d_spin_half_local_to_global,
@@ -120,6 +121,10 @@ __all__ = [
     "LieGroupBase",
     "SU2LieAlgebra",
     "SU2Group",
+    "frob_inner",
+    "structure_constants",
+    "lie_closure_basis",
+    "check_cartan_decomp",
     # mpo
     "FSM",
     "NamedData",
@@ -178,6 +183,7 @@ __all__ = [
     "commutator",
     "anti_commutator",
     'bra_o_ket',
+    "complex_einsum",
     # transforms
     "jordan_wigner_transform_1d_spin_half_local_to_global",
     "jordan_wigner_transform_1d_spin_half_global_to_global",

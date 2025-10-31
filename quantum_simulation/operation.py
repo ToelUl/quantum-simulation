@@ -105,3 +105,54 @@ def bra_o_ket(
     result = torch.einsum('...ij,...jk,...kl->...il', bra, o, ket)
 
     return torch.real(result) if real else result
+
+
+def complex_einsum(
+    pattern: str,
+    a: Tensor,
+    b: Tensor = None,
+    conj_a: int = 1,
+    conj_b: int = 1
+) -> Tensor:
+    """Perform a complex Einstein summation on tensors with separated real and imaginary parts.
+
+    This function applies the Einstein summation (einsum) operation on the real and imaginary
+    components of the input tensor(s) separately. The parameters `conj_a` and `conj_b`
+    determine whether to conjugate the corresponding tensor by multiplying its imaginary part
+    by -1.
+
+    Args:
+        pattern (str): The einsum string rule (e.g., 'ij,jk->ik').
+        a (Tensor): Input tensor with shape [..., 2], where the last dimension represents [real, imag].
+        b (Tensor, optional): Second input tensor with shape [..., 2]. Defaults to None.
+        conj_a (int, optional): Factor for conjugating `a` (1 for no conjugation, -1 for conjugation). Defaults to 1.
+        conj_b (int, optional): Factor for conjugating `b` (1 for no conjugation, -1 for conjugation). Defaults to 1.
+
+    Returns:
+        Tensor: A tensor with shape [..., 2] representing the complex result.
+
+    Example:
+        >>> import torch
+        >>> # a and b each has shape (1,1,2) => interpret as (batch=1, i=1, real/imag=2).
+        >>> a = torch.tensor([[[1.0, 2.0]]])  # (1,1,2)
+        >>> b = torch.tensor([[[3.0, 4.0]]])  # (1,1,2)
+        >>> # We'll do a very simple sum over the 'i' index => pattern 'bi,bi->b'
+        >>> # but to keep dimension naming consistent, let's do 'ijk,ijk->ij' if shapes matched.
+        >>> # For demonstration, let's do 'bij,bij->b' ignoring that we only have i=1 dimension:
+        >>> # Real part = (1*3 - 2*4) = -5
+        >>> # Imag part = (1*4 + 2*3) = 10
+        >>> out = complex_einsum('bi,bi->b', a, b)
+        >>> out
+        tensor([[-5., 10.]])
+    """
+    a_real, a_imag = a[..., 0], conj_a * a[..., 1]
+
+    if b is not None:
+        b_real, b_imag = b[..., 0], conj_b * b[..., 1]
+        out_real = torch.einsum(pattern, a_real, b_real) - torch.einsum(pattern, a_imag, b_imag)
+        out_imag = torch.einsum(pattern, a_real, b_imag) + torch.einsum(pattern, a_imag, b_real)
+    else:
+        out_real = torch.einsum(pattern, a_real)
+        out_imag = torch.einsum(pattern, a_imag)
+
+    return torch.stack((out_real, out_imag), dim=-1)
