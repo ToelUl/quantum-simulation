@@ -1,6 +1,8 @@
 from typing import List
 import numpy as np
+import torch
 from .domain import generate_k_space
+from .operation import bra_o_ket
 
 
 def transverse_xy_chain_instant_quench_bogo_coef(
@@ -166,6 +168,7 @@ def tf_xy_chain_mz_instant_quench(time_sequence: List[float],
                                   quench_time: float = 0,
                                   phi: float = 0.0) -> np.ndarray:
     """Compute the time evolution of the magnetization along z for the transverse XY chain after an instantaneous quench.
+    Reffering to the formulas in https://scipost.org/SciPostPhys.1.1.003/pdf (Eqs. 23).
 
     Args:
         time_sequence (List[float]): A list of time points at which to evaluate the magnetization.
@@ -184,5 +187,84 @@ def tf_xy_chain_mz_instant_quench(time_sequence: List[float],
         [-np.real(g_contractor(0, 0, t, lattice_length, jx, jy, h_initial, h_final, quench_time, phi)) for t in time_sequence])
 
     return mz_time_evolution - (mz_time_evolution[0] - 1.0)
+
+
+def dynamic_of_observables(time: List[float],
+                           observable_op: List[torch.Tensor],
+                           initial_state: torch.Tensor,
+                           hamiltonian_op: torch.Tensor) -> torch.Tensor:
+    """Compute the time evolution of observables under a given Hamiltonian.
+
+    Args:
+        time (List[float]): A list of time points at which to evaluate the observables.
+        observable_op (List[torch.Tensor]): A list of observable operators.
+        initial_state (torch.Tensor): The initial state vector.
+        hamiltonian_op (torch.Tensor): The Hamiltonian operator.
+
+    Returns:
+        torch.Tensor: A tensor of shape (len(time), len(observable_op)) containing the expectation values
+        of the observables at each time point.
+    """
+    device = initial_state.device
+    dtype = hamiltonian_op.dtype
+    hamiltonian_eigenvalues, hamiltonian_eigenvectors = torch.linalg.eigh(hamiltonian_op)
+    # eigenvalues: (D,)
+    # eigenvectors: (D, D)
+
+    # (D, D) @ (D, 1) -> (D, 1)
+    initial_state_in_eigenbasis = torch.matmul(
+        hamiltonian_eigenvectors.conj().T,
+        initial_state
+    )
+    t_tensor = torch.tensor(time, device=device).to(dtype)  # Shape: (T)
+
+    # (T, 1) * (1, D) -> (T, D)
+    time_evolution_phases = torch.exp(
+        -1j * t_tensor.unsqueeze(-1) * hamiltonian_eigenvalues.unsqueeze(0)
+    )
+
+    # (T, D) * (1, D) (from (D, 1).T) -> (T, D)
+    evolved_states_in_eigenbasis = time_evolution_phases * initial_state_in_eigenbasis.T
+
+    # (D, D) @ (D, T) -> (D, T)
+    evolved_states_T = torch.matmul(
+        hamiltonian_eigenvectors,
+        evolved_states_in_eigenbasis.T
+    )
+
+    evolved_states = evolved_states_T.T  # Shape: (T, D)
+
+    # N * (D, D) -> (N, D, D)
+    ops_stack = torch.stack(observable_op, dim=0)
+
+    # 'ket': |psi(t)>
+    # (T, D) -> (T, 1, D, 1)
+    # dim T for time, dim 1 for N operators
+    ket_batch = evolved_states.unsqueeze(1).unsqueeze(-1)
+
+    # 'bra': <psi(t)|
+    # (T, D) -> (T, 1, 1, D)
+    # (.conj())
+    bra_batch = evolved_states.conj().unsqueeze(1).unsqueeze(-2)
+
+    # (N, D, D) -> (1, N, D, D)
+    # dim 1 for broadcast T, dim N for operators
+    o_batch = ops_stack.unsqueeze(0)
+
+    # bra_batch: (T, 1, 1, D)
+    # o_batch:   (1, N, D, D)
+    # ket_batch: (T, 1, D, 1)
+    # einsum '...' is (T, N)
+    # einsum('...ij,...jk,...kl->...il')
+    # i=1, j=D, k=D, l=1
+    # output '...il' will be (T, N, 1, 1)
+    observables_time_evolution = bra_o_ket(
+        bra_batch,
+        o_batch,
+        ket_batch,
+        real=True
+    )
+    # (T, N, 1, 1) -> (T, N)
+    return observables_time_evolution.squeeze(-1).squeeze(-1)
 
 

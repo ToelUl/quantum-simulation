@@ -80,6 +80,7 @@ from .transform import (
 )
 from .dynamic import (
     tf_xy_chain_mz_instant_quench,
+    dynamic_of_observables,
 )
 from .hamiltonian import (
     Hamiltonian,
@@ -195,6 +196,7 @@ __all__ = [
     "to_global_operator",
     # dynamic
     "tf_xy_chain_mz_instant_quench",
+    "dynamic_of_observables",
     # hamiltonian
     "Hamiltonian",
     # models
