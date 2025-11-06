@@ -33,6 +33,21 @@ def nested_kronecker_product(tensors: List[Tensor]) -> Tensor:
         return torch.kron(tensors[0].contiguous(), nested_kronecker_product(tensors[1:]))
 
 
+def nested_matrix_product(tensors: List[Tensor]) -> Tensor:
+    """Computes the matrix product of a list of tensors recursively.
+
+    Args:
+        tensors (List[Tensor]): A list of tensors to be multiplied.
+
+    Returns:
+        Tensor: The result of the nested matrix product.
+    """
+    if len(tensors) == 2:
+        return torch.matmul(tensors[0].contiguous(), tensors[1].contiguous())
+    else:
+        return torch.matmul(tensors[0].contiguous(), nested_matrix_product(tensors[1:]))
+
+
 def commutator(a: Tensor, b: Tensor) -> Tensor:
     """Calculates the commutator of two tensors, [A, B] = AB - BA.
 

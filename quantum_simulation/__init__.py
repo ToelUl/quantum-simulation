@@ -6,6 +6,7 @@ from .group import (
     frob_inner,
     structure_constants,
     lie_closure_basis,
+    coefficients_in_lie_closure_basis,
     check_cartan_decomp,
 )
 from .mpo import (
@@ -25,6 +26,9 @@ from .operator import (
     pauli_x,
     pauli_y,
     pauli_z,
+    pauli_string,
+    global_pauli_op_chain,
+    global_pauli_op_chain_list,
     S_x,
     S_y,
     S_z,
@@ -66,6 +70,7 @@ from .state import (
 from .operation import (
     dagger,
     nested_kronecker_product,
+    nested_matrix_product,
     commutator,
     anti_commutator,
     bra_o_ket,
@@ -81,6 +86,7 @@ from .transform import (
 from .dynamic import (
     tf_xy_chain_mz_instant_quench,
     dynamic_of_observables,
+    dynamic_of_observables_lie_algebra_approach,
 )
 from .hamiltonian import (
     Hamiltonian,
@@ -128,6 +134,7 @@ __all__ = [
     "frob_inner",
     "structure_constants",
     "lie_closure_basis",
+    "coefficients_in_lie_closure_basis",
     "check_cartan_decomp",
     # mpo
     "FSM",
@@ -145,6 +152,9 @@ __all__ = [
     "pauli_x",
     "pauli_y",
     "pauli_z",
+    "pauli_string",
+    "global_pauli_op_chain",
+    "global_pauli_op_chain_list",
     "S_x",
     "S_y",
     "S_z",
@@ -184,6 +194,7 @@ __all__ = [
     # operations
     "dagger",
     "nested_kronecker_product",
+    "nested_matrix_product",
     "commutator",
     "anti_commutator",
     'bra_o_ket',
@@ -197,6 +208,7 @@ __all__ = [
     # dynamic
     "tf_xy_chain_mz_instant_quench",
     "dynamic_of_observables",
+    "dynamic_of_observables_lie_algebra_approach",
     # hamiltonian
     "Hamiltonian",
     # models
