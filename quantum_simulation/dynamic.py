@@ -1,8 +1,9 @@
-from typing import List
+from typing import List, Union
 import numpy as np
 import torch
 from .domain import generate_k_space
 from .operation import bra_o_ket
+from .group.utils import structure_constants
 
 
 def transverse_xy_chain_instant_quench_bogo_coef(
@@ -190,14 +191,14 @@ def tf_xy_chain_mz_instant_quench(time_sequence: List[float],
 
 
 def dynamic_of_observables(time: List[float],
-                           observable_op: List[torch.Tensor],
+                           observable_op: Union[List[torch.Tensor], torch.Tensor],
                            initial_state: torch.Tensor,
                            hamiltonian_op: torch.Tensor) -> torch.Tensor:
     """Compute the time evolution of observables under a given Hamiltonian.
 
     Args:
         time (List[float]): A list of time points at which to evaluate the observables.
-        observable_op (List[torch.Tensor]): A list of observable operators.
+        observable_op (Union[List[torch.Tensor], torch.Tensor]): A list of observable operators or a single operator.
         initial_state (torch.Tensor): The initial state vector.
         hamiltonian_op (torch.Tensor): The Hamiltonian operator.
 
@@ -235,7 +236,10 @@ def dynamic_of_observables(time: List[float],
     evolved_states = evolved_states_T.T  # Shape: (T, D)
 
     # N * (D, D) -> (N, D, D)
-    ops_stack = torch.stack(observable_op, dim=0)
+    if isinstance(observable_op, list):
+        ops_stack = torch.stack(observable_op, dim=0)
+    else:
+        ops_stack = observable_op.unsqueeze(0)
 
     # 'ket': |psi(t)>
     # (T, D) -> (T, 1, D, 1)
@@ -268,3 +272,48 @@ def dynamic_of_observables(time: List[float],
     return observables_time_evolution.squeeze(-1).squeeze(-1)
 
 
+def dynamic_of_observables_lie_algebra_approach(
+        time: List[float],
+        lie_closure_basis: torch.Tensor,
+        hamiltonian_coeffs: torch.Tensor,
+        observable_coeffs: torch.Tensor,
+        initial_state: torch.Tensor) -> torch.Tensor:
+    """Compute the time evolution of observables under a given Hamiltonian using Lie algebra approach.
+
+    Args:
+        time (List[float]): A list of time points at which to evaluate the observables.
+        lie_closure_basis (torch.Tensor): A tensor of shape (R, N, N) representing the Lie closure basis.
+        hamiltonian_coeffs (torch.Tensor): A tensor of shape (R,) representing the Hamiltonian coefficients in the Lie closure basis.
+        observable_coeffs (torch.Tensor): A tensor of shape (R,) representing the observable coefficients in the Lie closure basis.
+        initial_state (torch.Tensor): The initial state vector of shape (N,).
+
+    Returns:
+        torch.Tensor: A tensor of shape (len(time),) containing the expectation values
+        of the observable at each time point.
+    """
+    assert lie_closure_basis.ndim == 3  # (R, N, N)
+    assert hamiltonian_coeffs.shape[0] == lie_closure_basis.shape[0]  # (R,)
+    assert observable_coeffs.shape[0] == lie_closure_basis.shape[0]  # (R,)
+
+    device = initial_state.device
+    dtype = initial_state.dtype
+    density_matrix_op = initial_state @ initial_state.conj().T  # (N, N)
+    init_lie_algebra = torch.einsum('rij,ji->r', lie_closure_basis, density_matrix_op)  # (R,)
+    t_tensor = torch.tensor(time, device=device).to(dtype)  # Shape: (T)
+    eff_ham = torch.einsum('rij,i->rj', structure_constants(lie_closure_basis), hamiltonian_coeffs) # eff_ham: (R, R)
+    eff_ham_eigenvalues, eff_ham_eigenvectors = torch.linalg.eigh(eff_ham)  # (R,), (R, R)
+    init_lie_algebra_in_eigenbasis = torch.matmul(
+        eff_ham_eigenvectors.conj().T,
+        init_lie_algebra
+    )  # (R,)
+    time_evolution_phases = torch.exp(
+        1j * t_tensor.unsqueeze(-1) * eff_ham_eigenvalues.unsqueeze(0)
+    )  # (T, R)
+    evolved_states_in_eigenbasis = time_evolution_phases * init_lie_algebra_in_eigenbasis.unsqueeze(0)  # (T, R)
+    evolved_states_T = torch.matmul(
+        eff_ham_eigenvectors,
+        evolved_states_in_eigenbasis.T
+    )  # (R, T)
+    evolved_states = evolved_states_T.T  # (T, R)
+
+    return torch.real(torch.einsum('r,tr->t', observable_coeffs, evolved_states))  # (T,)

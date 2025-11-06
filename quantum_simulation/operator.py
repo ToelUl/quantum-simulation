@@ -1,7 +1,8 @@
 from .group import SU2Group
 from .operation import (
     dagger,
-    nested_kronecker_product
+    nested_kronecker_product,
+    nested_matrix_product,
 )
 from .transform import (
     jordan_wigner_transform_1d_spin_half_local_to_global,
@@ -10,6 +11,7 @@ from .transform import (
     lattice_inverse_fourier_transform_1d,
     to_global_operator,
 )
+from typing import List
 import torch
 
 
@@ -52,12 +54,11 @@ def pauli_z(spin=0.5) -> torch.Tensor:
     return spin_group.algebra.sigma_z
 
 
-def pauli_string(pauli_list: list[str], spin: float = 0.5) -> torch.Tensor:
+def pauli_string(pauli_str: str, spin: float = 0.5) -> torch.Tensor:
     """Constructs a Pauli string operator from a list of Pauli matrices.
 
     Args:
-        pauli_list (list[str]): A list of strings representing the Pauli matrices.
-            Each string should be one of 'I', 'X', 'Y', or 'Z'.
+        pauli_str (str): A string representing the Pauli operators (e.g., 'XZYI').
         spin (float): The spin value (default is 0.5).
 
     Returns:
@@ -69,8 +70,126 @@ def pauli_string(pauli_list: list[str], spin: float = 0.5) -> torch.Tensor:
         'Y': pauli_y(spin),
         'Z': pauli_z(spin)
     }
-    operators = [pauli_dict[p] for p in pauli_list]
+    operators = [pauli_dict[p] for p in pauli_str]
     return nested_kronecker_product(operators)
+
+
+def global_pauli_op_chain(op_type: str, lattice_length: int, spin: float = 0.5, pbc: bool = True) -> torch.Tensor:
+    """Constructs a global Pauli operator on a 1D lattice.
+    Args:
+        op_type (str): A string representing the type of Pauli operator
+            (e.g., 'X', 'Y', 'Z', 'XX', 'YY', 'ZZ', 'XXX', ...).
+        lattice_length (int): The length of the 1D lattice.
+        spin (float): The spin value (default is 0.5).
+        pbc (bool): Whether to apply periodic boundary conditions (default is True).
+
+    Returns:
+        torch.Tensor: The resulting global Pauli operator.
+    """
+    pauli_dict = {
+        'I': identity(spin),
+        'X': pauli_x(spin),
+        'Y': pauli_y(spin),
+        'Z': pauli_z(spin)
+    }
+    op_len = len(op_type)
+
+    if lattice_length < op_len:
+        raise ValueError("lattice_length must be greater than or equal to the length of op_type")
+
+    if lattice_length == op_len and not pbc:
+        temp_op_list = [to_global_operator(position, lattice_length, pauli_dict[op])
+                        for position, op in enumerate(op_type)]
+        if len(temp_op_list) == 1:
+            return temp_op_list[0]
+        else:
+            return nested_matrix_product(temp_op_list)
+
+    else:
+        global_op = torch.zeros((int((2 * spin + 1) ** lattice_length), int((2 * spin + 1) ** lattice_length)),
+                                dtype=torch.complex64)
+        if pbc:
+            num_terms = lattice_length
+        else:
+            num_terms = lattice_length - op_len + 1
+
+        for i in range(num_terms):
+            temp_op_list = []
+            for position, op in enumerate(op_type):
+                if pbc:
+                    site_index = (position + i) % lattice_length
+                else:
+                    site_index = position + i
+
+                temp_op_list.append(to_global_operator(site_index, lattice_length, pauli_dict[op]))
+
+            if len(temp_op_list) == 1:
+                temp_op = temp_op_list[0]
+            else:
+                temp_op = nested_matrix_product(temp_op_list)
+
+            global_op += temp_op
+
+        return global_op
+
+
+def global_pauli_op_chain_list(op_type: str, lattice_length: int, spin: float = 0.5, pbc: bool = True) -> List[torch.Tensor]:
+    """Constructs a list of global Pauli operators on a 1D lattice.
+    Args:
+        op_type (str): A string representing the type of Pauli operator
+            (e.g., 'X', 'Y', 'Z', 'XX', 'YY', 'ZZ', 'XXX', ...).
+        lattice_length (int): The length of the 1D lattice.
+        spin (float): The spin value (default is 0.5).
+        pbc (bool): Whether to apply periodic boundary conditions (default is True).
+
+    Returns:
+        List[torch.Tensor]: A list of resulting global Pauli operators.
+        e.g., for op_type='XX' and lattice_length=4, it returns [X1X2, X2X3, X3X4].
+    """
+    pauli_dict = {
+        'I': identity(spin),
+        'X': pauli_x(spin),
+        'Y': pauli_y(spin),
+        'Z': pauli_z(spin)
+    }
+    op_len = len(op_type)
+
+    if lattice_length < op_len:
+        raise ValueError("lattice_length must be greater than or equal to the length of op_type")
+
+    if lattice_length == op_len and not pbc:
+        temp_op_list = [to_global_operator(position, lattice_length, pauli_dict[op])
+                        for position, op in enumerate(op_type)]
+        if len(temp_op_list) == 1:
+            return temp_op_list
+        else:
+            return [nested_matrix_product(temp_op_list)]
+
+    else:
+        global_op = []
+        if pbc:
+            num_terms = lattice_length
+        else:
+            num_terms = lattice_length - op_len + 1
+
+        for i in range(num_terms):
+            temp_op_list = []
+            for position, op in enumerate(op_type):
+                if pbc:
+                    site_index = (position + i) % lattice_length
+                else:
+                    site_index = position + i
+
+                temp_op_list.append(to_global_operator(site_index, lattice_length, pauli_dict[op]))
+
+            if len(temp_op_list) == 1:
+                temp_op = temp_op_list[0]
+            else:
+                temp_op = nested_matrix_product(temp_op_list)
+
+            global_op.append(temp_op)
+
+        return global_op
 
 
 def S_x(spin=0.5) -> torch.Tensor:

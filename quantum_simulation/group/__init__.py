@@ -4,6 +4,7 @@ from .utils import (
     frob_inner,
     structure_constants,
     lie_closure_basis,
+    coefficients_in_lie_closure_basis,
     check_cartan_decomp,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "frob_inner",
     "structure_constants",
     "lie_closure_basis",
+    "coefficients_in_lie_closure_basis",
     "check_cartan_decomp",
 ]
