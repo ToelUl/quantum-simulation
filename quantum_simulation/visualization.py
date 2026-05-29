@@ -2,7 +2,15 @@ import sympy as sym
 import numpy as np
 from torch import Tensor
 from typing import Union
-from IPython.display import Math, display
+try:
+    from IPython.display import Math, display
+except ModuleNotFoundError:
+    class Math(str):
+        pass
+
+    def display(*args, **kwargs):
+        if args:
+            print(args[0])
 
 
 def show_matrix(matrix: Tensor, precision: int=2):
