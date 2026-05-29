@@ -4,7 +4,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Union, Callable, Dict, Any, Optional
 
-from IPython.display import display
+try:
+    from IPython.display import display
+except ModuleNotFoundError:
+    def display(*args, **kwargs):
+        if args:
+            print(args[0])
 
 from . import operator as op
 from .hamiltonian import Hamiltonian

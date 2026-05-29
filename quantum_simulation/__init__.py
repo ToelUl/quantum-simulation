@@ -159,6 +159,24 @@ from .dmrg import (
     DMRG,
     Sweeps,
 )
+from .dmrg_observables import (
+    ground_state_energy,
+    energy_density,
+    excitation_gap,
+    entanglement_entropy,
+    truncation_errors,
+    local_expectation,
+    two_point_correlation,
+    energy_variance,
+)
+from .dmrg_advanced_observables import (
+    structure_factor,
+    correlation_length,
+    entanglement_spectrum,
+    string_order_parameter,
+    ground_state_fidelity,
+    many_body_polarization,
+)
 from .visualization import (
     show_matrix,
     jordan_wigner_transform_symbolize,
@@ -316,6 +334,20 @@ __all__ = [
     'MPS',
     'DMRG',
     'Sweeps',
+    'ground_state_energy',
+    'energy_density',
+    'excitation_gap',
+    'entanglement_entropy',
+    'truncation_errors',
+    'local_expectation',
+    'two_point_correlation',
+    'energy_variance',
+    'structure_factor',
+    'correlation_length',
+    'entanglement_spectrum',
+    'string_order_parameter',
+    'ground_state_fidelity',
+    'many_body_polarization',
     # visualization
     'show_matrix',
     'jordan_wigner_transform_symbolize',

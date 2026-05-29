@@ -516,6 +516,9 @@ class DMRG(nn.Module):
         Nsites (int): Number of sites in the MPS/MPO chain.
         chid (int): Physical Hilbert-space dimension per site.
         contract_backend (str): Requested contraction backend policy.
+        history (dict): Per-run diagnostics including local energies,
+            discarded weights, kept bond dimensions, sweep numbers,
+            directions, and site indices.
     """
 
     def __init__(self, mps: MPS, mpo: Any, *, device: Any = 'cpu', dtype: torch.dtype = torch.float64,
@@ -558,6 +561,18 @@ class DMRG(nn.Module):
         _check_mpo_shapes(self.Ms, self.ML, self.MR, self.chid)
         # Initialize compute modules
         self.apply_mpo = ApplyMPO(contract_backend)
+        self.history = self._empty_history()
+
+    @staticmethod
+    def _empty_history() -> dict:
+        return {
+            'energies': [],
+            'discarded_weights': [],
+            'bond_dims': [],
+            'sweeps': [],
+            'directions': [],
+            'sites': [],
+        }
 
     def _sweep(self,
                direction: str,
@@ -657,6 +672,7 @@ class DMRG(nn.Module):
                     pro=reortho, pro_max_reorth=maxreortho,
                 )
                 Ekeep.append(Entemp)
+                self.history['energies'].append(float(Entemp))
 
             # --- 3. (Optional) Add noise ---
             if noise > 0:
@@ -677,6 +693,14 @@ class DMRG(nn.Module):
 
             chitemp = min(chitemp_maxdim, chitemp_cutoff)
             chitemp = max(1, chitemp)
+
+            discarded = S[chitemp:]
+            discarded_weight = torch.sum(discarded ** 2).real.item()
+            self.history['discarded_weights'].append(discarded_weight)
+            self.history['bond_dims'].append(int(chitemp))
+            self.history['sweeps'].append(int(sweep_idx))
+            self.history['directions'].append(direction)
+            self.history['sites'].append(int(p))
 
             # Update MPS tensors
             sv = S[:chitemp]
@@ -721,6 +745,7 @@ class DMRG(nn.Module):
             is the optimized MPS object.
         """
         Ekeep = []
+        self.history = self._empty_history()
         env_manager = EnvironmentManager(self.Ms, self.device, self.dtype, self.contract_backend)
 
         # Pre-compute all R environments from the initial right-canonical MPS
