@@ -3,7 +3,7 @@ from .cyclic_group import CyclicGroup
 from .Z2_group import Z2Group
 from .SU2_group import SU2LieAlgebra, SU2Group
 from .U1_group import U1LieAlgebra, U1Group
-from .unitary_group import URLieAlgebra, URankGroup
+from .Unitary_group import URLieAlgebra, URankGroup
 from .utils import (
     frob_inner,
     structure_constants,
