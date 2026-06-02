@@ -146,7 +146,7 @@ class MPS(nn.Module):
 
 
     def __repr__(self) -> str:
-        bond_dims = [t.shape[0] for t in self._A[1:]] + [self._A[-1].shape[2]]
+        bond_dims = [self._A[0].shape[0]] + [t.shape[2] for t in self._A]
         return (f"MPS(Nsites={self.Nsites}, chid={self.chid}, "
                 f"ortho_center={self.ortho_center}, bond_dims={bond_dims})")
 
