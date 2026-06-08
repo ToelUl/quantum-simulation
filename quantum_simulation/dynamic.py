@@ -127,7 +127,7 @@ def cc_correlator_xy_chain_instant_quench(
     return 1j * np.sum(integral_list) / (k_space[-1] - k_space[0])
 
 
-def g_contractor(
+def g_correlator(
         i: int, j: int,
         dynamic_time: float, lattice_length: int,
         jx: float, jy: float, h_initial: float, h_final: float,
@@ -185,7 +185,7 @@ def tf_xy_chain_mz_instant_quench(time_sequence: List[float],
         np.ndarray: An array of magnetization values at the specified time points.
     """
     mz_time_evolution = np.array(
-        [-np.real(g_contractor(0, 0, t, lattice_length, jx, jy, h_initial, h_final, quench_time, phi)) for t in time_sequence])
+        [-np.real(g_correlator(0, 0, t, lattice_length, jx, jy, h_initial, h_final, quench_time, phi)) for t in time_sequence])
 
     return mz_time_evolution - (mz_time_evolution[0] - 1.0)
 
